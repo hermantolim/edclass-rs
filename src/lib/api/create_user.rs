@@ -1,5 +1,7 @@
 // src/api/create_user.rs
-use crate::common::{StudentsParents, UserRole, UserWithPassword};
+use crate::common::{
+    StudentsParents, UserRole, UserWithPassword, STUDENTS_PARENTS_COLLECTION, USERS_COLLECTION,
+};
 use actix_web::{post, web, Responder};
 use argonautica::Hasher;
 use firestore::*;
@@ -22,7 +24,7 @@ async fn save_user_to_firestore(
 ) -> Result<(), Box<dyn std::error::Error>> {
     db.fluent()
         .insert()
-        .into("users")
+        .into(USERS_COLLECTION)
         .document_id(&user.uid.to_string())
         .object(user)
         .execute()
@@ -40,7 +42,7 @@ async fn save_user_to_firestore(
 
                 db.fluent()
                     .update()
-                    .in_col("students-parents")
+                    .in_col(STUDENTS_PARENTS_COLLECTION)
                     .document_id(&format!("{}_{}", &s_p.student_id, &s_p.parent_id))
                     .object(&s_p)
                     .add_to_batch(&mut current_batch)?;

@@ -53,6 +53,8 @@ pub struct Enrollment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageState {
+    Pending,
+    Failed,
     Sent,
     Received,
     Read,

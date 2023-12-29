@@ -1,4 +1,4 @@
-use crate::common::{User, UserWithPassword};
+use crate::common::{User, UserWithPassword, USERS_COLLECTION};
 use firestore::{path, paths, FirestoreDb};
 use futures::TryStreamExt;
 use uuid::Uuid;
@@ -11,7 +11,7 @@ pub async fn get_user_by_id(
         .fluent()
         .select()
         .fields(paths!(User::{uid, email, name, role}))
-        .by_id_in("users")
+        .by_id_in(USERS_COLLECTION)
         .obj()
         .one(&id.to_string())
         .await?;
@@ -26,7 +26,7 @@ pub async fn try_find_user(
     let object_stream = db
         .fluent()
         .select()
-        .from("users")
+        .from(USERS_COLLECTION)
         .filter(|q| q.for_all([q.field(path!(UserWithPassword::email)).eq(username)]))
         .limit(1)
         .obj()

@@ -2,7 +2,7 @@
 
 use crate::api::basic_auth::TokenClaims;
 use crate::common::user::get_user_by_id;
-use crate::common::{Message, MessageState};
+use crate::common::{Message, MessageState, MESSAGES_COLLECTION};
 use actix_web::web::ReqData;
 use actix_web::{post, web, HttpResponse, Responder};
 use chrono::Utc;
@@ -24,7 +24,7 @@ async fn try_list_messages(
             let objs_stream: BoxStream<FirestoreResult<Message>> = db
                 .fluent()
                 .select()
-                .from("messages")
+                .from(MESSAGES_COLLECTION)
                 .filter(|q| q.for_all([q.field("receiver_id").eq(user.uid.to_string())]))
                 .order_by([(
                     path!(Message::created_at),
@@ -86,14 +86,14 @@ pub async fn send_message(
                     receiver_id: msg.receiver_id,
                     subject: msg.subject.to_owned(),
                     content: msg.content.to_owned(),
-                    state: MessageState::Sent,
+                    state: MessageState::Pending,
                     created_at: Utc::now(),
                 };
 
                 let req: FirestoreResult<Message> = db
                     .fluent()
                     .insert()
-                    .into("messages")
+                    .into(MESSAGES_COLLECTION)
                     .document_id(message_data.id.to_string())
                     .object(&message_data)
                     .execute()
