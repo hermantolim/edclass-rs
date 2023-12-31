@@ -1,6 +1,6 @@
 use crate::common::user::try_find_user;
 use actix_web::web::Data;
-use actix_web::{get, HttpResponse, Responder};
+use actix_web::{get, web, HttpResponse, Responder};
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use argonautica::Verifier;
 use firestore::FirestoreDb;
@@ -15,8 +15,16 @@ pub struct TokenClaims {
     pub id: Uuid,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct DeviceIdInfo {
+    pub device_id: Option<String>,
+}
 #[get("/auth")]
-pub async fn basic_auth(db: Data<FirestoreDb>, credentials: BasicAuth) -> impl Responder {
+pub async fn basic_auth(
+    db: Data<FirestoreDb>,
+    credentials: BasicAuth,
+    device_info: web::Json<DeviceIdInfo>,
+) -> impl Responder {
     let jwt_secret: Hmac<Sha256> = Hmac::new_from_slice(
         std::env::var("JWT_SECRET")
             .expect("JWT_SECRET must be set!")

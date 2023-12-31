@@ -1,4 +1,5 @@
 mod constants;
+pub mod message;
 mod model;
 pub mod user;
 mod util;

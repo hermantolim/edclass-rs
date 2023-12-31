@@ -4,8 +4,8 @@ use actix_web_httpauth::extractors::{bearer, AuthenticationError};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenv::dotenv;
 use edclass_lib::api::basic_auth::{basic_auth, TokenClaims};
-use edclass_lib::api::create_user::create_user;
-use edclass_lib::api::message::send_message;
+use edclass_lib::api::message::{list_all, list_inbox, list_sent, send_message};
+use edclass_lib::api::user::{create_user, update_devices};
 use edclass_lib::common::config_env_var;
 use firestore::{FirestoreDb, FirestoreResult};
 use hmac::{Hmac, Mac};
@@ -63,7 +63,15 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(client.clone()))
             .service(create_user)
             .service(basic_auth)
-            .service(web::scope("").wrap(bearer).service(send_message))
+            .service(
+                web::scope("")
+                    .wrap(bearer)
+                    .service(send_message)
+                    .service(list_inbox)
+                    .service(list_sent)
+                    .service(list_all)
+                    .service(update_devices),
+            )
     })
     .keep_alive(Duration::from_secs(75))
     .bind(("0.0.0.0", 8080))?
