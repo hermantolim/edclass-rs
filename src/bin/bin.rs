@@ -3,9 +3,13 @@ use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::extractors::{bearer, AuthenticationError};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenv::dotenv;
-use edclass_lib::api::basic_auth::{basic_auth, TokenClaims};
-use edclass_lib::api::message::{list_all, list_inbox, list_sent, send_message};
-use edclass_lib::api::user::{create_user, update_devices};
+use edclass_lib::api::auth::{login, register_user, TokenClaims};
+use edclass_lib::api::course::{get_course, list_courses};
+use edclass_lib::api::enrollment::enroll;
+use edclass_lib::api::message::{
+    get_message, list_all, list_inbox, list_sent, send_message, update_message_state,
+};
+use edclass_lib::api::user::update_devices;
 use edclass_lib::common::config_env_var;
 use firestore::{FirestoreDb, FirestoreResult};
 use hmac::{Hmac, Mac};
@@ -51,18 +55,34 @@ async fn validator(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    if let None = std::env::var("RUST_LOG").ok() {
+        std::env::set_var(
+            "RUST_LOG",
+            "edclass_lib=debug,edclass_bin=debug,actix_web=debug,actix_server=debug",
+        );
+    }
 
-    let client = setup_firestore_client()
+    env_logger::init();
+
+    let firestore_db = setup_firestore_client()
         .await
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "failed to connect firestore"))?;
+
+    let http_client = reqwest::Client::new();
+
+    /*let app_state = AppState {
+        db: firestore_db,
+        http: http_client,
+    };*/
 
     HttpServer::new(move || {
         let bearer = HttpAuthentication::bearer(validator);
         App::new()
             .wrap(middleware::Logger::default())
-            .app_data(web::Data::new(client.clone()))
-            .service(create_user)
-            .service(basic_auth)
+            .app_data(web::Data::new(firestore_db.clone()))
+            .app_data(web::Data::new(http_client.clone()))
+            .service(register_user)
+            .service(login)
             .service(
                 web::scope("")
                     .wrap(bearer)
@@ -70,7 +90,12 @@ async fn main() -> std::io::Result<()> {
                     .service(list_inbox)
                     .service(list_sent)
                     .service(list_all)
-                    .service(update_devices),
+                    .service(get_message)
+                    .service(update_message_state)
+                    .service(update_devices)
+                    .service(list_courses)
+                    .service(get_course)
+                    .service(enroll),
             )
     })
     .keep_alive(Duration::from_secs(75))
