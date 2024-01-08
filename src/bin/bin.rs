@@ -70,11 +70,6 @@ async fn main() -> std::io::Result<()> {
 
     let http_client = reqwest::Client::new();
 
-    /*let app_state = AppState {
-        db: firestore_db,
-        http: http_client,
-    };*/
-
     HttpServer::new(move || {
         let bearer = HttpAuthentication::bearer(validator);
         App::new()

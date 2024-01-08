@@ -28,20 +28,24 @@ pub async fn get_user_by_id(
 
 pub async fn try_find_user(
     db: &FirestoreDb,
-    email: &str,
+    email_or_id: &str,
 ) -> Result<Option<UserWithPassword>, Box<dyn std::error::Error + Send + Sync>> {
-    let object_stream = db
+    let users: Vec<UserWithPassword> = db
         .fluent()
         .select()
         .from(USERS_COLLECTION)
-        .filter(|q| q.for_all([q.field(path!(UserWithPassword::email)).eq(email)]))
+        .filter(|q| {
+            q.for_any([
+                q.field(path!(UserWithPassword::email)).eq(email_or_id),
+                q.field(path!(UserWithPassword::uid)).eq(email_or_id),
+            ])
+        })
         .limit(1)
         .obj()
-        .stream_query_with_errors()
+        .query()
         .await?;
 
-    let user_vec = object_stream.try_collect::<Vec<UserWithPassword>>().await?;
-    Ok(user_vec.into_iter().next())
+    Ok(users.into_iter().next())
 }
 
 pub async fn save_user_to_db(
@@ -94,7 +98,9 @@ pub async fn try_add_device(
     match get_user_by_id(db, &req.id).await? {
         Some(user) => {
             let mut devices = user.devices.clone();
-            devices.push(device_id);
+            if !devices.contains(&device_id) {
+                devices.push(device_id);
+            }
 
             db.fluent()
                 .update()

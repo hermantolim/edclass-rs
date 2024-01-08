@@ -2,18 +2,18 @@
 
 use actix_web::web::ReqData;
 use actix_web::{get, post, web, HttpResponse, Responder};
-use chrono::Utc;
+
 use firestore::struct_path::paths;
 use firestore::{FirestoreDb, FirestoreResult};
-use log::{debug, error};
+
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use uuid::Uuid;
 
 use crate::api::auth::TokenClaims;
 use crate::common::message::{try_list_messages, try_send_messages, MessageType};
 use crate::common::user::get_user_by_id;
-use crate::common::{send_notification_to_emails, Message, MessageState, MESSAGES_COLLECTION};
+use crate::common::{Message, MessageState, MESSAGES_COLLECTION};
+use crate::{check_user, result_option_match};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MessageBody {
@@ -39,40 +39,6 @@ pub async fn send_message(
                     Err(e) => HttpResponse::InternalServerError()
                         .json(json!({"error": format!("{:?}", e)})),
                 }
-                /*let message_data = Message {
-                    id: Uuid::new_v4(),
-                    sender_id: user_data.uid,
-                    receiver_ids: msg.receiver_ids,
-                    subject: msg.subject.to_owned(),
-                    content: msg.content.to_owned(),
-                    state: MessageState::Pending,
-                    created_at: Utc::now(),
-                };
-
-                let req: FirestoreResult<Message> = db
-                    .fluent()
-                    .insert()
-                    .into(MESSAGES_COLLECTION)
-                    .document_id(message_data.id.to_string())
-                    .object(&message_data)
-                    .execute()
-                    .await;
-
-                match req {
-                    Ok(_) => {
-                        let _ = send_notification_to_emails(
-                            &db,
-                            &http,
-                            message_data.receiver_ids.as_slice(),
-                            message_data.subject.as_deref(),
-                            &message_data.content,
-                        )
-                        .await;
-                        HttpResponse::Ok().json(json!({"success": true}))
-                    }
-                    Err(e) => HttpResponse::InternalServerError()
-                        .json(json!({"error": format!("{:?}", e)})),
-                }*/
             }
             _ => HttpResponse::Unauthorized().json(json!({"error": "unable to verify identity"})),
         },
@@ -90,11 +56,7 @@ pub async fn get_message(db: web::Data<FirestoreDb>, path: web::Path<String>) ->
         .one(path.as_ref())
         .await;
 
-    match data {
-        Ok(Some(m)) => HttpResponse::Ok().json(m),
-        Ok(None) => HttpResponse::NotFound().json(json!({"error": "not found"})),
-        Err(e) => HttpResponse::InternalServerError().json(json!({"error": format!("{:?}", e)})),
-    }
+    result_option_match!(data)
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,16 +133,13 @@ async fn list_messages(
     req_user: Option<ReqData<TokenClaims>>,
     message_type: MessageType,
 ) -> impl Responder {
-    match req_user {
-        Some(user) => {
-            let list = try_list_messages(db, user, message_type).await;
-            match list {
-                Ok(messages) => HttpResponse::Ok().json(messages),
-                Err(e) => {
-                    HttpResponse::InternalServerError().json(json!({"error": format!("{:?}", e)}))
-                }
+    check_user!(req_user, db, u, {
+        let list = try_list_messages(db, &u, message_type).await;
+        match list {
+            Ok(messages) => HttpResponse::Ok().json(messages),
+            Err(e) => {
+                HttpResponse::InternalServerError().json(json!({"error": format!("{:?}", e)}))
             }
         }
-        _ => HttpResponse::Unauthorized().json(json!({"error": "unable to verify identity"})),
-    }
+    })
 }

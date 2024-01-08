@@ -1,7 +1,7 @@
 use crate::common::user::{make_user, save_user_to_db, try_find_user};
 use crate::common::{User, UserRole, UserWithPasswordStudents};
-use actix_web::web::Data;
-use actix_web::{get, post, web, HttpResponse, Responder};
+use actix_web::web::{Data, Json};
+use actix_web::{get, post, HttpResponse, Responder};
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use argonautica::Verifier;
 use firestore::FirestoreDb;
@@ -93,10 +93,7 @@ pub struct RegisterUserBody {
 }
 
 #[post("/auth/register")]
-pub async fn register_user(
-    db: web::Data<FirestoreDb>,
-    info: web::Json<RegisterUserBody>,
-) -> impl Responder {
+pub async fn register_user(db: Data<FirestoreDb>, info: Json<RegisterUserBody>) -> impl Responder {
     if info.password != info.confirm_password {
         return HttpResponse::NotAcceptable().json(json!({"error": "password do not match"}));
     }
