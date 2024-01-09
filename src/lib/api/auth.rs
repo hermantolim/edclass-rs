@@ -89,7 +89,7 @@ pub struct RegisterUserBody {
     password: String,
     confirm_password: String,
     role: UserRole,
-    students: Option<Vec<Uuid>>,
+    students: Option<Vec<String>>,
 }
 
 #[post("/auth/register")]
@@ -108,16 +108,25 @@ pub async fn register_user(db: Data<FirestoreDb>, info: Json<RegisterUserBody>) 
     }
 
     let inner = info.into_inner();
-    let (user, kids) = make_user(&UserWithPasswordStudents {
-        password: inner.password,
-        email: inner.email,
-        role: inner.role,
-        students: inner.students,
-        name: inner.name,
-    });
+    let next_user = make_user(
+        &db,
+        &UserWithPasswordStudents {
+            password: inner.password,
+            email: inner.email,
+            role: inner.role,
+            students: inner.students,
+            name: inner.name,
+        },
+    )
+    .await;
 
-    match save_user_to_db(&db, &user, kids).await {
-        Ok(_) => HttpResponse::Ok().json(user),
+    match next_user {
+        Ok((user, kids)) => match save_user_to_db(&db, &user, kids).await {
+            Ok(_) => HttpResponse::Ok().json(user),
+            Err(e) => {
+                HttpResponse::InternalServerError().json(json!({"error": format!("{:?}", e)}))
+            }
+        },
         Err(e) => HttpResponse::InternalServerError().json(json!({"error": format!("{:?}", e)})),
     }
 }

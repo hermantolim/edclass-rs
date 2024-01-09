@@ -4,8 +4,9 @@ use actix_web_httpauth::extractors::{bearer, AuthenticationError};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use dotenv::dotenv;
 use edclass_lib::api::auth::{login, register_user, TokenClaims};
-use edclass_lib::api::course::{get_course, list_courses};
+use edclass_lib::api::course::{get_course, list_courses, list_my_courses};
 use edclass_lib::api::enrollment::enroll;
+use edclass_lib::api::kid::get_kids;
 use edclass_lib::api::message::{
     get_message, list_all, list_inbox, list_sent, send_message, update_message_state,
 };
@@ -89,7 +90,9 @@ async fn main() -> std::io::Result<()> {
                     .service(update_message_state)
                     .service(update_devices)
                     .service(list_courses)
+                    .service(list_my_courses)
                     .service(get_course)
+                    .service(get_kids)
                     .service(enroll),
             )
     })

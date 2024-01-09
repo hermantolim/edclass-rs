@@ -47,9 +47,10 @@ pub async fn list_user_enrolled_in(
         .select()
         .from(ENROLLMENTS_COLLECTION)
         .filter(|q| {
-            q.for_any([q
-                .field(path!(Enrollment::course_id))
-                .array_contains(course_id)])
+            q.for_any([
+                // filter by course id
+                q.field(path!(Enrollment::course_id)).eq(&course_id),
+            ])
         })
         .obj()
         .query()

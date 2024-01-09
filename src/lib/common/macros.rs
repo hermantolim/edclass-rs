@@ -10,6 +10,16 @@ macro_rules! result_option_match {
  }
 
 #[macro_export]
+macro_rules! result_match {
+    ($id:ident) => {
+        match $id {
+            Ok(res) => actix_web::HttpResponse::Ok().json(res),
+            Err(e) => actix_web::HttpResponse::InternalServerError().json(serde_json::json!({"error": format!("{:?}", e)})),
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! check_user {
     ($id:ident, $db:ident, $u:ident, $action:expr) => {
         match $id {

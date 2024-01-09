@@ -63,7 +63,13 @@ pub struct UserWithPasswordStudents {
     pub password: String,
     pub role: UserRole,
     pub name: String,
-    pub students: Option<Vec<Uuid>>,
+    pub students: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Kid {
+    pub user: User,
+    pub courses: Vec<Course>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -80,6 +86,12 @@ pub struct CourseEnrollment {
     pub enrolled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct MyCourse {
+    pub course: Course,
+    pub students: usize,
+}
+
 impl Hash for Course {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
@@ -92,7 +104,10 @@ pub struct Enrollment {
     // user uuid -> role -> student
     pub student_id: Uuid,
 }
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrollmentCounter {
+    pub students: usize,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageState {

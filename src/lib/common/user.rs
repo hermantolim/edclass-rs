@@ -1,12 +1,14 @@
 use crate::api::auth::TokenClaims;
 use crate::common::{
-    StudentsParents, User, UserRole, UserWithPassword, UserWithPasswordStudents,
+    Course, Enrollment, Kid, StudentsParents, User, UserRole, UserWithPassword,
+    UserWithPasswordStudents, COURSES_COLLECTION, ENROLLMENTS_COLLECTION,
     STUDENTS_PARENTS_COLLECTION, USERS_COLLECTION,
 };
 use actix_web::web::ReqData;
 use argonautica::Hasher;
-use firestore::{path, paths, FirestoreDb};
-use futures::TryStreamExt;
+use firestore::{path, paths, FirestoreDb, FirestoreResult};
+use futures::stream::BoxStream;
+use futures::{StreamExt, TryStreamExt};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -123,7 +125,10 @@ pub async fn try_add_device(
     }
 }
 
-pub fn make_user(user: &UserWithPasswordStudents) -> (UserWithPassword, Option<Vec<Uuid>>) {
+pub async fn make_user(
+    db: &FirestoreDb,
+    user: &UserWithPasswordStudents,
+) -> Result<(UserWithPassword, Option<Vec<Uuid>>), Box<dyn std::error::Error>> {
     let hash_secret = std::env::var("HASH_SECRET").expect("HASH_SECRET must be set!");
     let mut hasher = Hasher::default();
     let hash = hasher
@@ -133,14 +138,32 @@ pub fn make_user(user: &UserWithPasswordStudents) -> (UserWithPassword, Option<V
         .unwrap();
 
     let (role, kids) = match &user.role {
-        UserRole::Parent => (UserRole::Parent, user.students.as_ref().cloned()),
+        UserRole::Parent => {
+            let student_emails = user.students.as_ref().cloned();
+            let k = match student_emails {
+                Some(mails) => {
+                    let students: Vec<User> = db
+                        .fluent()
+                        .select()
+                        .from(USERS_COLLECTION)
+                        .filter(|q| q.for_all([q.field(path!(User::email)).is_in(&mails)]))
+                        .obj()
+                        .query()
+                        .await?;
+
+                    Some(students.into_iter().map(|s| s.uid).collect::<Vec<_>>())
+                }
+                _ => Some(Vec::new()),
+            };
+            (UserRole::Parent, k)
+        }
         UserRole::Student => (UserRole::Student, None),
         UserRole::Teacher => (UserRole::Teacher, None),
         UserRole::Admin => (UserRole::Admin, None),
         UserRole::System => (UserRole::System, None),
     };
 
-    (
+    Ok((
         UserWithPassword {
             uid: Uuid::new_v4(),
             email: user.email.clone(),
@@ -150,7 +173,7 @@ pub fn make_user(user: &UserWithPasswordStudents) -> (UserWithPassword, Option<V
             devices: Vec::new(),
         },
         kids,
-    )
+    ))
 }
 
 pub async fn try_get_users_from_emails<T: AsRef<str> + Serialize>(
@@ -239,4 +262,63 @@ pub async fn get_system_user(db: &FirestoreDb) -> Result<User, Box<dyn std::erro
             "user not found",
         ))),
     }
+}
+
+pub async fn get_kids(
+    db: &FirestoreDb,
+    user: &User,
+) -> Result<Vec<Kid>, Box<dyn std::error::Error>> {
+    let mut sp: BoxStream<FirestoreResult<StudentsParents>> = db
+        .fluent()
+        .select()
+        .from(STUDENTS_PARENTS_COLLECTION)
+        .filter(|q| q.for_all([q.field(path!(StudentsParents::parent_id)).eq(&user.uid)]))
+        .obj()
+        .stream_query_with_errors()
+        .await?;
+
+    let mut kids = Vec::new();
+    while let Some(Ok(s)) = sp.next().await {
+        if let Ok(Some(student)) = get_user_by_id(&db, &s.student_id).await {
+            let mut enrollments: BoxStream<FirestoreResult<Enrollment>> = db
+                .fluent()
+                .select()
+                .from(ENROLLMENTS_COLLECTION)
+                .filter(|q| {
+                    q.for_all([
+                        //
+                        q.field(path!(Enrollment::student_id)).eq(&student.uid),
+                    ])
+                })
+                .obj()
+                .stream_query_with_errors()
+                .await?;
+
+            let mut enrollment_ids = Vec::new();
+            while let Some(Ok(enrollment)) = enrollments.next().await {
+                enrollment_ids.push(enrollment.course_id);
+            }
+
+            let courses = db
+                .fluent()
+                .select()
+                .from(COURSES_COLLECTION)
+                .filter(|q| {
+                    q.for_any([
+                        // enrollment course
+                        q.field(path!(Course::id)).is_in(&enrollment_ids),
+                    ])
+                })
+                .obj()
+                .query()
+                .await?;
+
+            kids.push(Kid {
+                user: student,
+                courses,
+            });
+        }
+    }
+    println!("============== kids {:#?}", kids);
+    Ok(kids)
 }

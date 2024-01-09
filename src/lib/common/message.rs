@@ -1,17 +1,12 @@
-use crate::api::auth::TokenClaims;
 use crate::api::message::MessageBody;
-use crate::common::user::get_user_by_id;
 use crate::common::{
     send_notification_to_emails, Message, MessageState, User, MESSAGES_COLLECTION,
 };
-use actix_web::web::ReqData;
-
 use chrono::Utc;
 use firestore::{path, FirestoreDb, FirestoreQueryDirection, FirestoreResult};
 use futures::stream::BoxStream;
 use futures::TryStreamExt;
 use log::debug;
-
 use uuid::Uuid;
 
 pub enum MessageType {

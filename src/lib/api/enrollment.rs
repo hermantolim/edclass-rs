@@ -1,6 +1,7 @@
 use crate::api::auth::TokenClaims;
 use crate::api::message::MessageBody;
 use crate::check_user;
+use crate::common::course::get_teacher;
 use crate::common::enrollment;
 use crate::common::message::try_send_messages;
 use crate::common::user::{get_system_user, try_get_student_parents};
@@ -40,10 +41,16 @@ pub async fn enroll(
         match enrollment::enroll(&db, &data).await {
             Ok(_) => {
                 let parents = try_get_student_parents(&db, &u.uid).await;
+                let teacher = get_teacher(&db, &data.course_id).await;
+
                 match parents {
                     Ok(p) => {
-                        let parents_email =
+                        let mut parents_email =
                             p.iter().map(|pp| pp.email.to_string()).collect::<Vec<_>>();
+
+                        if let Ok(t) = teacher {
+                            parents_email.extend_from_slice(&t.devices);
+                        }
 
                         let sys = get_system_user(&db).await;
                         debug!("sys user {:?}", sys);
